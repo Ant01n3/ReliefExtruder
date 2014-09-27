@@ -19,5 +19,6 @@ project/plugins/project/
 # Others
 *.csv
 *.xlsx
+*.stl
 *.sublime-project
 *.sublime-workspace

@@ -13,11 +13,14 @@ object ReliefExtruder extends App {
 	var volume = -1.0
 	var scale  = 1.0
 	var yscale = 1.0
+	var imin   = 0.0
+	var imax   = 100.0
 
 	var output:String = null
 	var input:String = null
 
-	options(args.drop(1).toList)
+//	options(args.drop(1).toList)
+	options(args.toList)
 	
 	def options(list:List[String]) {
 		list match {
@@ -27,6 +30,7 @@ object ReliefExtruder extends App {
 			case "-volume" :: v :: tail => { volume = v.toDouble; options(tail) }
 			case "-scale" :: s :: tail => { scale = s.toDouble; options(tail) }
 			case "-yscale" :: y :: tail => { yscale = y.toDouble; options(tail) }
+			case "-imagescale" :: min :: max :: tail => { imin = min.toDouble; imax = max.toDouble; options(tail) }
 			case a :: tail => { if(a.startsWith("-")) usage("Unknown option '%s'".format(a)) else { input = a; options(tail) } }
 		}
 	}
@@ -39,7 +43,10 @@ object ReliefExtruder extends App {
 		if(message ne null)
 			printf("%s%n%n".format(message))
 		println("Usage: relief <input.csv> [-out <output>] [-box <startx endx starty endy>] [-volume <height>] [-scale <factor>] [-scale <factor>]")
-		println("       <input.csv>                     A file in CSV format, where the separator is ; in the specific MNT format")
+		println("       <input.csv> or <input.png>      Either a file in CSV format, where the separator is ; in the specific MNT format,")
+		println("                                       or a PNG image prepared in a specific format where each level is a color in the")
+		println("                                       chromatic circle (HSV color model). See the -imagescale option to specify minimum (violet)")
+		println("                                       and maximum elevations in the image (red).")
 		println("       -out <output>                   Name of the resulting output file, the '.stl' extension is added if needed")
 		println("                                       If given the output is a binary STL file. If not given, output goes to")
 		println("                                       the standard output and the STL is in ASCII.")
@@ -48,6 +55,8 @@ object ReliefExtruder extends App {
 		println("                                       is output.")
 		println("       -scale <factor>                 Allow to scale the whole model by a given factor.")
 		println("       -yscale <factor>                Allow to scale only the elevation (may be used with -scale).")
+		println("       -imagescale <min> <max>         Specify the minimum <min> and maximum <max> elevations in an input image (not")
+		println("                                       used in csv format).")
 		sys.exit(1)
 	}
 	
@@ -57,7 +66,7 @@ object ReliefExtruder extends App {
 		val outFile = if(output ne null) (if(output.endsWith(".stl")) output else "%s.stl".format(output)) else null
 
 		print("* Reading       ")
-		val heightMap = HeightMap(input, startx, endx, starty, endy, scale, yscale)
+		val heightMap = HeightMap(input, startx, endx, starty, endy, scale, yscale, imin, imax)
 		heightMap.setVolume(volume)
 		println(" OK")
 		

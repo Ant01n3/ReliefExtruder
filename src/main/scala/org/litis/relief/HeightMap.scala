@@ -9,6 +9,7 @@ import java.io.{File, InputStream, FileInputStream, FileOutputStream, PrintStrea
 import javax.imageio.ImageIO
 
 
+/** HeightMap companion object allowing to create height maps from CSV and PNG files. */
 object HeightMap {
 // Parsing
 
@@ -19,16 +20,19 @@ object HeightMap {
 	final val CellSize  = """cellsize;([0-9]+);+""".r
 	final val NoData    = """NODATA_value;(-?[0-9]+);+""".r
 
-	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double):HeightMap = {
+// HeightMap Creation from files
+
+	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double):HeightMap = {
 		if(fileName.endsWith(".csv")) {
 			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor)
 		} else if(fileName.endsWith(".png")) {
-			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor)
+			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax)
 		} else {
 			throw new RuntimeException("only '.csv' file accepted")
 		}
 	}
 
+	/** Created a [[HeightMap]] from a CSV file. */
 	def readFileCSV(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double):HeightMap = {
 		var heightMap:HeightMap = null
 		val src      = new BufferedSource(new FileInputStream(fileName))
@@ -70,7 +74,8 @@ object HeightMap {
 		heightMap
 	}
 
-	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double):HeightMap = {
+	/** Create a [[HeigtMap]] from a PNG image. */
+	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double):HeightMap = {
         val image = ImageIO.read(new File(fileName))
 		var sx    = startx
 		var ex    = endx
@@ -88,7 +93,7 @@ object HeightMap {
 		while(row < ey) {
 			var col = sx
 			while(col < ex) {
-				heightMap.setCell(col, row, pixelToValue(image.getRGB(col, row)))
+				heightMap.setCell(col, row, pixelToValue(image.getRGB(col, row), iMin, iMax))
 				col += 1
 			}
 			if(row % 100 == 0) print("[line %d]".format(row))
@@ -98,14 +103,20 @@ object HeightMap {
 		heightMap
 	}
 
-	protected def pixelToValue(pixel:Int):Double = {
-		val r = ((pixel >> 16) & 0xFF)
-		val g = ((pixel >>  8) & 0xFF)
-		val b = ((pixel      ) & 0xFF)
+	/** Convert a `rgb` pixel into an elevation using the hue only (not the saturation, nor the value).
+	  * The resulting hue is scaled between `iMin` and `iMax`. */
+	protected def pixelToValue(rgb:Int, iMin:Double, iMax:Double):Double = {
+		val r = ((rgb >> 16) & 0xFF)
+		val g = ((rgb >>  8) & 0xFF)
+		val b = ((rgb      ) & 0xFF)
 		val (hue, saturation, value) = Rgba(r/255.0, g/255.0, b/255.0, 1).toHSV
-		val h = (1.0-(hue/(2*Pi)))
+		var res = (1.0-(hue/(2*Pi)))
 
-		if(h == 1.0) 0.0 else h*100
+		if(res == 1.0) res = 0.0 	// Special case of white pixels = nodata
+
+		res = iMin + (res * (iMax - iMin))
+
+		res
 	}
 }
 
