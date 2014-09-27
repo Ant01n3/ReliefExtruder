@@ -225,11 +225,7 @@ class Rgba(
 
 			(hue, saturation, value)
 		} else {
-			if(red == 0)
-				(0.0, 0.0, 0.0) // Black
-			else if(red == 1.0) 
-				(0.0, 0.0, 1.0)	// White
-			else throw new RuntimeException("WTF?")
+			(0.0, 0.0, red) // white, grey or black, all components the same value.
 		}
 	}
 

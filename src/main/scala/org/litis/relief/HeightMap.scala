@@ -61,7 +61,7 @@ object HeightMap {
 					heightMap.translate(sx, sy)
 				}
 
-				if(curRow % 100 == 0) print("[line %d]".format(curRow))
+				if(curRow % 100 == 0) print("[row %d]".format(curRow))
 
 				if(curRow >= sy && curRow < ey) {
 					val values = line.split(";").map { _.replace(",", ".").toDouble }.drop(sx)
@@ -87,7 +87,7 @@ object HeightMap {
         if(sx < 0) sx = 0; if(ex < 0 || ex > image.getWidth)  ex = image.getWidth
         if(sy < 0) sy = 0; if(ey < 0 || ey > image.getHeight) ey = image.getHeight
 
-		var heightMap = new HeightMap(ex-sx, ey-sy, -1000, 1, scaleFactor, yFactor)
+		var heightMap = new HeightMap(ex-sx, ey-sy, 0, 1, scaleFactor, yFactor)
 		var row = sy
 
 		while(row < ey) {
@@ -96,7 +96,7 @@ object HeightMap {
 				heightMap.setCell(col, row, pixelToValue(image.getRGB(col, row), iMin, iMax))
 				col += 1
 			}
-			if(row % 100 == 0) print("[line %d]".format(row))
+			if(row % 100 == 0) print("[row %d]".format(row))
 			row += 1
 		}
 
@@ -146,6 +146,12 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 
 	/** The Y position of this heightmap in a global file, this is used as a translation. */
 	protected var starty = 0.0
+
+	/** Computed minimum value in the heightmap. */
+	protected var minValue = Double.MaxValue
+
+	/** Computed maximum value in the heightmap. */
+	protected var maxValue = Double.MinValue
 
 	/** Number of stored points. */
 	def pointCount:Int = data.size
@@ -199,38 +205,31 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	/** Set a cell at (`col`, `row`) in the heightmap with `value`. The `value` is
 	  * scaled by `scaleFactor` and `yFactor`. */ 
 	def setCell(col:Int, row:Int, value:Double) {
-			data(row)(col) = Point3(/*X*/ (this.starty + row * cellSize) * scaleFactor,
-								    /*Y*/ value * scaleFactor * yFactor,
-								    /*Z*/ (this.startx + col * cellSize) * scaleFactor)		
+		val v = value * scaleFactor * yFactor
+
+		if(value != nodata) {
+			if(v < minValue) minValue = v
+			if(v > maxValue) maxValue = v			
+		}
+
+		data(row)(col) = Point3(/*X*/ (this.starty + row * cellSize) * scaleFactor,
+							    /*Y*/ v,
+							    /*Z*/ (this.startx + col * cellSize) * scaleFactor)		
 	}
 
 	/** Normalize the point cloud by aligning nodata points to the minimum point. */
 	def normalize() {
-		var min = -nodata
-		var max = nodata
 		var y = 0
+		print("[min %f][max %f] ".format(minValue, maxValue))
 		while(y < rows) {
 			var x = 0
 			while(x < cols) {
 				val d = (data(y)(x)).y
 
-				if(d > nodata*scaleFactor && d < min)
-					min = d
-				if(d > max)
-					max = d
-
-				x += 1
-			}
-			y += 1
-		}
-		print("[min %f][max %f] ".format(min, max))
-		y = 0
-		while(y < rows) {
-			var x = 0
-			while(x < cols) {
-				val d = (data(y)(x)).y
-				if(d <= nodata*scaleFactor)
-					(data(y)(x)).y = min
+				if(d == nodata*scaleFactor*yFactor && d < minValue) {
+					(data(y)(x)).y = minValue
+//					print("[%f]".format(d))
+				}
 				x += 1
 			}
 			y += 1
@@ -276,8 +275,8 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 				x += 1
 			}
 
-			if(((y*2*cols) % 1000) == 0)
-				print("[%d]".format(y * 2 * cols))
+			if((y % 100) == 0)
+				print("[row %d]".format(y))
 			
 			y += 1
 		}
@@ -285,8 +284,10 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 
 	/** Triangulate the sides of the base. */
 	def triangulateSides() {
-		val base = -baseDepth*scaleFactor
+		val base = minValue - (baseDepth * scaleFactor * yFactor)
 		var x = 0
+
+		print("[sides]")
 
 		// Front and back.
 
@@ -340,9 +341,11 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 
 	/** Triangulate the back of the base. */
 	def triangulateBack() {
-		val base = -baseDepth*scaleFactor
-		val center = Point3((starty + (rows/2))*scaleFactor, -baseDepth*scaleFactor, (startx + (cols/2))*scaleFactor)
+		val base = minValue - (baseDepth * scaleFactor * yFactor)
+		val center = Point3((starty + (rows/2))*scaleFactor, base, (startx + (cols/2))*scaleFactor)
 		var x = 0
+
+		print("[back]")
 
 		// Center toward front and back.
 
@@ -392,9 +395,9 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	def beginSTL(name:String, fileName:String, binary:Boolean = true) {
 		if(output eq null) {
 			if(binary) {
-				output = new AsciiSTLOutput(name, fileName)
-			} else {
 				output = new BinarySTLOutput(name, fileName, triangleCount)
+			} else {
+				output = new AsciiSTLOutput(name, fileName)
 			}
 			
 			output.begin
