@@ -22,24 +22,24 @@ object HeightMap {
 
 // HeightMap Creation from files
 
-	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double):HeightMap = {
+	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double):HeightMap = {
 		if(fileName.endsWith(".csv")) {
-			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor)
+			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor, cellSize)
 		} else if(fileName.endsWith(".png")) {
-			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax)
+			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax, cellSize)
 		} else {
 			throw new RuntimeException("only '.csv' file accepted")
 		}
 	}
 
 	/** Created a [[HeightMap]] from a CSV file. */
-	def readFileCSV(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double):HeightMap = {
+	def readFileCSV(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, cellSize:Double):HeightMap = {
 		var heightMap:HeightMap = null
 		val src      = new BufferedSource(new FileInputStream(fileName))
 		var ncols    = 0
 		var nrows    = 0
 		var nodata   = 0.0
-		var cellSize = 0.0
+		var cellsize = cellSize
 		var curRow   = 0
 		var sx       = startx
 		var ex       = endx
@@ -51,12 +51,12 @@ object HeightMap {
 			case NRows(rows)    => { nrows = rows.toInt; if(sy < 0) sy = 0; if(ey < 0 || ey > nrows) ey = nrows }
 			case Xllcorner(yll) => { /* What is the use of this ? */ }
 			case Yllcorner(yll) => { /* What is the use of this ? */ }
-			case CellSize(size) => { cellSize = size.toDouble }
+			case CellSize(size) => { if(cellSize == 1.0) cellsize = size.toDouble }
 			case NoData(value)  => { nodata = value.toDouble }
 			case line           => {
 				// The format ensure informations will have been read before ?
 				if(heightMap eq null) {
-				 	heightMap = new HeightMap(ex-sx, ey-sy, nodata, cellSize, scaleFactor, yFactor)
+				 	heightMap = new HeightMap(ex-sx, ey-sy, nodata, cellsize, scaleFactor, yFactor)
 					print("[%d x %d -> %d x %d]".format(ncols, nrows, ex-sx, ey-sy))
 					heightMap.translate(sx, sy)
 				}
@@ -75,7 +75,7 @@ object HeightMap {
 	}
 
 	/** Create a [[HeigtMap]] from a PNG image. */
-	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double):HeightMap = {
+	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double):HeightMap = {
         val image = ImageIO.read(new File(fileName))
 		var sx    = startx
 		var ex    = endx
@@ -87,7 +87,7 @@ object HeightMap {
         if(sx < 0) sx = 0; if(ex < 0 || ex > image.getWidth)  ex = image.getWidth
         if(sy < 0) sy = 0; if(ey < 0 || ey > image.getHeight) ey = image.getHeight
 
-		var heightMap = new HeightMap(ex-sx, ey-sy, 0, 1, scaleFactor, yFactor)
+		var heightMap = new HeightMap(ex-sx, ey-sy, 0, cellSize, scaleFactor, yFactor)
 		var row = sy
 
 		while(row < ey) {
