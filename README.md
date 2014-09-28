@@ -1,6 +1,6 @@
 # ReliefExtruder
 
-A height-map generator that produce files in STL suitable for 3D printing. The height maps are grids of regularly spaced points describing the elevation or height of, for example, a geographical map. The program reads these points and generated a 3D model of it in the STL format, suitable for use with many 3D printers and 3D softwares.
+A height-map generator that produce files in STL suitable for 3D printing. The height maps are grids of regularly spaced points describing the elevation or height of, for example, a geographical map. The program reads these points and generates a 3D model of it in the STL format, suitable for use with many 3D printers and 3D softwares.
 
 ## Compilation
 
@@ -16,7 +16,7 @@ Using sbt, you can issue the command:
 
     assembly
 
-This will generate an executable jar named `ReliefExtruder.jar` in the `target/scala-2.11` directory. The jar contains all the dependancies. Simply execute it:
+This will generate an executable jar named `ReliefExtruder.jar` in the `target/scala-2.11` directory. The jar contains all the dependencies. Simply execute it:
 
     java -jar ReliefExtruder.jar
 
@@ -40,7 +40,7 @@ This line will print an usage description.
 
 ## Usage
 
-The extruder works with specialy prepared `.csv` files or specially prepared `.png` images. The input files describe a grid of points. Each point defines a value as the height of the terrain 
+The extruder works with specially prepared `.csv` files or specially prepared `.png` images. The input files describe a grid of points. Each point defines a value as the height of the terrain 
 
 ### Input format CSV
 
@@ -77,13 +77,13 @@ ASCII STL files can become very large. To create a more compact binary STL into 
 
     java -jar ReliefExtruder.jar myfile.png -out myfile.stl
 
-This usage will only produce a *surface* 3D file. This means that only the points described by the input file are transformed into 3D triangles representing the surface like a crumpled sheet of paper. To create a volume as if the resulting surface was extruded from a block of terrain, use the `-volume` option. This option takes a parameter that give the height in meters of the volume in addition the the max height of the heigh map. The final height will then be the difference between the lowest and highest values of the data plus the volume base height.
+This usage will only produce a *surface* 3D file. This means that only the points described by the input file are transformed into 3D triangles representing the surface like a crumpled sheet of paper. To create a volume as if the resulting surface was extruded from a block of terrain, use the `-volume` option. This option takes a parameter that give the height in meters of the volume in addition the the max height of the height map. The final height will then be the difference between the lowest and highest values of the data plus the volume base height.
 
 The 3D object produced uses the `cellsize` parameter of CSV or assume one meter for PNG. You can scale the whole output model using the `-scale` option. For example using `0.1` will divide by `10` the size of the output model. You can also play only on the elevation with `-yscale`. This options will only scale the elevation of the values. These two parameters can be used at the same time, they multiply.
 
 You can also ask to produce a model that is a part only of the input data. Use the `-box` option with four parameters: the start along X (columns) the end along X, the start along Y (rows) and the end along Y. The values here are indices for rows and columns. They start at zero.
 
-When using an image as input, the file does not specify how the color map to values. We use a chromatic circle where the first and highest value is red, and the last and lowest value is magenta. The `-imagescale` option allows to map values to these colors, other values being linearly interpolated. You give two paramters, first the min value, mapping to magenta, then the max value mapping to red. The values given here are assumed to be meters.
+When using an image as input, the file does not specify how the color map to values. We use a chromatic circle where the first and highest value is red, and the last and lowest value is magenta. The `-imagescale` option allows to map values to these colors, other values being linearly interpolated. You give two parameters, first the min value, mapping to magenta, then the max value mapping to red. The values given here are assumed to be meters.
 
 The `-cellsize` option allows to bypass the `cellsize` indicator in CSV and to replace the default value of 1 in PNG images. It specifies the spacing between data points in meters.
 
