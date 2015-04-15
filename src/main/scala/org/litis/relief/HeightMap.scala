@@ -22,11 +22,11 @@ object HeightMap {
 
 // HeightMap Creation from files
 
-	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double):HeightMap = {
+	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean):HeightMap = {
 		if(fileName.endsWith(".csv")) {
 			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor, cellSize)
 		} else if(fileName.endsWith(".png")) {
-			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax, cellSize)
+			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax, cellSize, greyData)
 		} else {
 			throw new RuntimeException("only '.csv' file accepted")
 		}
@@ -75,7 +75,7 @@ object HeightMap {
 	}
 
 	/** Create a [[HeigtMap]] from a PNG image. */
-	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double):HeightMap = {
+	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean):HeightMap = {
         val image = ImageIO.read(new File(fileName))
 		var sx    = startx
 		var ex    = endx
@@ -93,7 +93,9 @@ object HeightMap {
 		while(row < ey) {
 			var col = sx
 			while(col < ex) {
-				heightMap.setCell(col, row, pixelToValue(image.getRGB(col, row), iMin, iMax))
+				if(greyData)
+				     heightMap.setCell(col, row, pixelToValueFromGrey(image.getRGB(col, row), iMin, iMax))
+				else heightMap.setCell(col, row, pixelToValueFromHue(image.getRGB(col, row), iMin, iMax))
 				col += 1
 			}
 			if(row % 100 == 0) print("[row %d]".format(row))
@@ -103,9 +105,18 @@ object HeightMap {
 		heightMap
 	}
 
+	/** Convert a `rgb` considered as grey into an elevation using the red component only.
+	  * The resulting value is scaled between `iMin` and `iMax`. */
+	protected def pixelToValueFromGrey(rgb:Int, iMin:Double, iMax:Double):Double = {
+		val g = ((rgb >> 16) & 0xFF)	// The red component...
+		val c = g / 255.0
+
+		iMin + (c * (iMax - iMin))
+	}
+
 	/** Convert a `rgb` pixel into an elevation using the hue only (not the saturation, nor the value).
 	  * The resulting hue is scaled between `iMin` and `iMax`. */
-	protected def pixelToValue(rgb:Int, iMin:Double, iMax:Double):Double = {
+	protected def pixelToValueFromHue(rgb:Int, iMin:Double, iMax:Double):Double = {
 		val r = ((rgb >> 16) & 0xFF)
 		val g = ((rgb >>  8) & 0xFF)
 		val b = ((rgb      ) & 0xFF)
@@ -253,7 +264,7 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	def triangulateSurface() {	
 
 		// p0    p2
-		//  +----+  CCW
+		//  +----+  CW
 		//  |   /|
 		//  |  / |
 		//  | /  |

@@ -16,6 +16,7 @@ object ReliefExtruder extends App {
 	var imin     = 0.0
 	var imax     = 100.0
 	var cellsize = 1.0
+	var greyData = false
 
 	var output:String = null
 	var input:String = null
@@ -33,6 +34,7 @@ object ReliefExtruder extends App {
 			case "-yscale" :: y :: tail => { yscale = y.toDouble; options(tail) }
 			case "-imagescale" :: min :: max :: tail => { imin = min.toDouble; imax = max.toDouble; options(tail) }
 			case "-cellsize" :: s :: tail => { cellsize = s.toDouble; options(tail) }
+			case "-grey" :: tail => { greyData = true; options(tail) }
 			case a :: tail => { if(a.startsWith("-")) usage("Unknown option '%s'".format(a)) else { input = a; options(tail) } }
 		}
 	}
@@ -60,6 +62,8 @@ object ReliefExtruder extends App {
 		println("       -imagescale <min> <max>         Specify the minimum <min> and maximum <max> elevations in an input image (not")
 		println("                                       used in csv format). Values are assumed to be meters.")
 		println("       -cellsize <size>                Spacing between data points. Values are assumed to be meters.")
+		println("       -grey                           If an image is passed, the hue is used by default to create a height, use grey")
+		println("                                       intensity instead with this option.")
 		sys.exit(1)
 	}
 	
@@ -69,7 +73,7 @@ object ReliefExtruder extends App {
 		val outFile = if(output ne null) (if(output.endsWith(".stl")) output else "%s.stl".format(output)) else null
 
 		print("* Reading       ")
-		val heightMap = HeightMap(input, startx, endx, starty, endy, scale, yscale, imin, imax, cellsize)
+		val heightMap = HeightMap(input, startx, endx, starty, endy, scale, yscale, imin, imax, cellsize, greyData)
 		heightMap.setVolume(volume)
 		println(" OK")
 		

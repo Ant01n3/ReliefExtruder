@@ -23,3 +23,6 @@ project/plugins/project/
 *.sublime-project
 *.sublime-workspace
 *.blend
+*.blend1
+*.bfb
+CrielTest*

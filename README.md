@@ -40,11 +40,11 @@ This line will print an usage description.
 
 ## Usage
 
-The extruder works with specially prepared `.csv` files or specially prepared `.png` images. The input files describe a grid of points. Each point defines a value as the height of the terrain 
+The extruder works with specially prepared `.csv` files or specially prepared `.png` images. The input files describes a grid of points. Each point defines a value as the height of the terrain 
 
 ### Input format CSV
 
-CSV files are plain text files where values are separated by a delimiter, often a comma (hence the name CSV: Comma Separated Values). Here the values must be separated by `;`` to avoid confusing the comma inside numbers (in some European countries, the dot is indicated as a comma).
+CSV files are plain text files where values are separated by a delimiter, often a comma (hence the name CSV: Comma Separated Values). Here the values must be separated by `;` to avoid confusing the comma inside numbers (in some European countries, the dot is indicated as a comma).
 
 Here the file must include a header that must contain, in this order lines describing the data, first a `ncols`
 and `nrows` indicators that give the dimension of the area:
