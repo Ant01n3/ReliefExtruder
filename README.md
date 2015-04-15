@@ -63,7 +63,11 @@ After this header simply comes the data, there are as many lines as `nrows` indi
 
 ### Input format PNG
 
-PNG file can also be used, they must represent a map where color indicates height. The range of color follows the chromatic cirle, often seen in HSV color models. This also follows the light spectrum: Red, Yellow, Green, Cyan, Blue, Magenta. The value and saturation of the color is not used, but you should probably use plainly saturated colors with the value to 1.
+PNG file can also be used, they must represent a map where color indicates height. Either the hue or the grey-scale is used. When using images, one must indicate what is the minimum height and the maximum height.
+
+When using the hue. The range of color follows the chromatic circle, often seen in HSV color models. This also follows the light spectrum: Red, Yellow, Green, Cyan, Blue, Magenta. The value and saturation of the color is not used, but you should probably use plainly saturated colors with the value to 1.
+
+When using grey-scale images, the red component only is used (therefore you are restricted to 256 possible levels). When using grey-scale you must pass the `-grey` option. 
 
 TODO put an example.
 
