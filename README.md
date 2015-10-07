@@ -87,7 +87,7 @@ The 3D object produced uses the `cellsize` parameter of CSV or assume one meter 
 
 You can also ask to produce a model that is a part only of the input data. Use the `-box` option with four parameters: the start along X (columns) the end along X, the start along Y (rows) and the end along Y. The values here are indices for rows and columns. They start at zero.
 
-When using an image as input, the file does not specify how the color map to values. We use a chromatic circle where the first and highest value is red, and the last and lowest value is magenta. The `-imagescale` option allows to map values to these colors, other values being linearly interpolated. You give two parameters, first the min value, mapping to magenta, then the max value mapping to red. The values given here are assumed to be meters.
+When using an image as input, the file does not specify how the color maps to values. We use a chromatic circle where the first and highest value is red, and the last and lowest value is magenta. The `-imagescale` option allows to map values to these colors, other values being linearly interpolated. You give two parameters, first the min value, mapping to magenta, then the max value mapping to red. The values given here are assumed to be meters.
 
 The `-cellsize` option allows to bypass the `cellsize` indicator in CSV and to replace the default value of 1 in PNG images. It specifies the spacing between data points in meters.
 

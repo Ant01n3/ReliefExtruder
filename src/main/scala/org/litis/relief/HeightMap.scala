@@ -13,22 +13,23 @@ import javax.imageio.ImageIO
 object HeightMap {
 // Parsing
 
-	final val NCols     = """ncols;([0-9]+);+""".r
-	final val NRows     = """nrows;([0-9]+);+""".r
-	final val Yllcorner = """yllcorner;([0-9]+,?[0-9]*);+""".r
-	final val Xllcorner = """xllcorner;([0-9]+,?[0-9]*);+""".r
-	final val CellSize  = """cellsize;([0-9]+);+""".r
-	final val NoData    = """NODATA_value;(-?[0-9]+);+""".r
+	final val NCols    = """ncols;([0-9]+);+""".r
+	final val NColsSp  = """ncols\s+([0-9]+)\s*""".r
+	final val NRows    = """nrows(;|\s+)([0-9]+)(;+|\s*)""".r
+	final val Yll      = """yll(corner|center)(;|\s+)([0-9]+[\.,]?[0-9]*)(;+|\s*)""".r
+	final val Xll      = """xll(corner|center)(;|\s+)([0-9]+[\.,]?[0-9]*)(;+|\s*)""".r
+	final val CellSize = """cellsize(;|\s+)([0-9]+[\.,]?[0-9]*)(;+|\s*)""".r
+	final val NoData   = """(NODATA|nodata)_value(;|\s+)(-?[0-9]+)(;+|\s*)""".r
 
 // HeightMap Creation from files
 
 	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean):HeightMap = {
-		if(fileName.endsWith(".csv")) {
+		if(fileName.endsWith(".csv") || fileName.endsWith(".asc")) {
 			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor, cellSize)
 		} else if(fileName.endsWith(".png")) {
 			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax, cellSize, greyData)
 		} else {
-			throw new RuntimeException("only '.csv' file accepted")
+			throw new RuntimeException("only '.csv', '.asc' and '.png' files are accepted")
 		}
 	}
 
@@ -45,28 +46,34 @@ object HeightMap {
 		var ex       = endx
 		var sy       = starty
 		var ey       = endy
+		var spaceSeparated = false
 
 		src.getLines.foreach { _ match {
-			case NCols(cols)    => { ncols = cols.toInt; if(sx < 0) sx = 0; if(ex < 0 || ex > ncols) ex = ncols }
-			case NRows(rows)    => { nrows = rows.toInt; if(sy < 0) sy = 0; if(ey < 0 || ey > nrows) ey = nrows }
-			case Xllcorner(yll) => { /* What is the use of this ? */ }
-			case Yllcorner(yll) => { /* What is the use of this ? */ }
-			case CellSize(size) => { if(cellSize == 1.0) cellsize = size.toDouble }
-			case NoData(value)  => { nodata = value.toDouble }
-			case line           => {
+			case NCols(cols)         => { ncols = cols.toInt; if(sx < 0) sx = 0; if(ex < 0 || ex > ncols) ex = ncols; spaceSeparated = false }
+			case NColsSp(cols)       => { ncols = cols.toInt; if(sx < 0) sx = 0; if(ex < 0 || ex > ncols) ex = ncols; spaceSeparated = true }
+			case NRows(_,rows,_)     => { nrows = rows.toInt; if(sy < 0) sy = 0; if(ey < 0 || ey > nrows) ey = nrows }
+			case Xll(c,_,xll,_)      => { printf("xll %s (%s)%n",xll,c) /* easting coordinate. */ }
+			case Yll(c,_,yll,_)      => { printf("yll %s (%s)%n",yll,c) /* northing coordinate. */ }
+			case CellSize(_,size,_)  => { if(cellSize == 1.0) cellsize = size.toDouble }
+			case NoData(a,b,value,c) => { nodata = value.toDouble }
+			case line                => {
 				// The format ensure informations will have been read before ?
 				if(heightMap eq null) {
 				 	heightMap = new HeightMap(ex-sx, ey-sy, nodata, cellsize, scaleFactor, yFactor)
-					print("[%d x %d -> %d x %d]".format(ncols, nrows, ex-sx, ey-sy))
+					print("[%d x %d -> %d x %d (spaces=%b)]".format(ncols, nrows, ex-sx, ey-sy, spaceSeparated))
 					heightMap.translate(sx, sy)
+//printf("sx=%d ex=%d sy=%d ey=%d ncols=%d nrows=%d size=%f nodata=%f%n", sx, ex, sy, ey, ncols, nrows, cellSize, nodata)
 				}
+
 
 				if(curRow % 100 == 0) print("[row %d]".format(curRow))
 
 				if(curRow >= sy && curRow < ey) {
-					val values = line.split(";").map { _.replace(",", ".").toDouble }.drop(sx)
+					val values = if(spaceSeparated)
+					     line.trim.split("\\s+").slice(sx,ex).map { _.replace(",", ".").toDouble }
+					else line.trim.split(";").slice(sx,ex).map { _.replace(",", ".").toDouble }
 					heightMap.setLine(curRow-sy, values)
-				}	
+				}
 				curRow += 1
 			}
 		}}
