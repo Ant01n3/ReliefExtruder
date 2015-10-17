@@ -9,6 +9,28 @@ import java.io.{File, InputStream, FileInputStream, FileOutputStream, PrintStrea
 import javax.imageio.ImageIO
 
 
+/** Techniques of resizing of the heightmap. */
+object ResizeMethod extends Enumeration {
+	val Lanczos2 = Value
+	val Lanczos3 = Value
+	val Lanczos4 = Value
+	val Hq3x = Value
+	val Hq4x = Value
+	val Unknown = Value
+
+	type ResizeMethod = Value
+
+	def fromString(s:String):ResizeMethod = s.toLowerCase match {
+		case "lanczos2" => Lanczos2
+		case "lanczos3" => Lanczos3
+		case "lanczos4" => Lanczos4
+		case "hq3x" => Hq3x 
+		case "hq4x" => Hq4x
+		case _ => Unknown
+	}
+}
+
+
 /** HeightMap companion object allowing to create height maps from CSV and PNG files. */
 object HeightMap {
 // Parsing
@@ -33,7 +55,7 @@ object HeightMap {
 		}
 	}
 
-	/** Created a [[HeightMap]] from a CSV file. */
+	/** Created a [[HeightMap]] from a CSV or ASC file. */
 	def readFileCSV(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, cellSize:Double):HeightMap = {
 		var heightMap:HeightMap = null
 		val src      = new BufferedSource(new FileInputStream(fileName))
@@ -47,24 +69,29 @@ object HeightMap {
 		var sy       = starty
 		var ey       = endy
 		var spaceSeparated = false
+		var latm     = 0.0
+		var lonm     = 0.0
 
 		src.getLines.foreach { _ match {
 			case NCols(cols)         => { ncols = cols.toInt; if(sx < 0) sx = 0; if(ex < 0 || ex > ncols) ex = ncols; spaceSeparated = false }
 			case NColsSp(cols)       => { ncols = cols.toInt; if(sx < 0) sx = 0; if(ex < 0 || ex > ncols) ex = ncols; spaceSeparated = true }
 			case NRows(_,rows,_)     => { nrows = rows.toInt; if(sy < 0) sy = 0; if(ey < 0 || ey > nrows) ey = nrows }
-			case Xll(c,_,xll,_)      => { printf("xll %s (%s)%n",xll,c) /* easting coordinate. */ }
-			case Yll(c,_,yll,_)      => { printf("yll %s (%s)%n",yll,c) /* northing coordinate. */ }
+			case Xll(c,_,xll,_)      => { latm = xll.toDouble /* easting coordinate. */ }
+			case Yll(c,_,yll,_)      => { lonm = yll.toDouble /* northing coordinate. */ }
 			case CellSize(_,size,_)  => { if(cellSize == 1.0) cellsize = size.toDouble }
 			case NoData(a,b,value,c) => { nodata = value.toDouble }
 			case line                => {
 				// The format ensure informations will have been read before ?
 				if(heightMap eq null) {
+					latm = 49.4899
+					lonm = 0.1099
+					printf("[(%f %f) -> %f lat %f lon -> %f lat %f lon]%n", latm, lonm, y2lat_m(latm), x2lon_m(lonm), lat2y_m(latm), lon2x_m(lonm))
+
 				 	heightMap = new HeightMap(ex-sx, ey-sy, nodata, cellsize, scaleFactor, yFactor)
 					print("[%d x %d -> %d x %d (spaces=%b)]".format(ncols, nrows, ex-sx, ey-sy, spaceSeparated))
 					heightMap.translate(sx, sy)
 //printf("sx=%d ex=%d sy=%d ey=%d ncols=%d nrows=%d size=%f nodata=%f%n", sx, ex, sy, ey, ncols, nrows, cellSize, nodata)
 				}
-
 
 				if(curRow % 100 == 0) print("[row %d]".format(curRow))
 
@@ -80,6 +107,28 @@ object HeightMap {
 
 		heightMap
 	}
+
+
+	def deg2rad(d:Double) = (((d)*Pi)/180.0)
+	def rad2deg(d:Double) = (((d)*180.0)/Pi)
+	val earth_radius = 6378137
+ 
+// /* The following functions take or return there results in degrees */
+ 
+// double y2lat_d(double y) { return rad2deg(2 * atan(exp(  deg2rad(y) ) ) - M_PI/2); }
+// double x2lon_d(double x) { return x; }
+// double lat2y_d(double lat) { return rad2deg(log(tan(M_PI/4+ deg2rad(lat)/2))); }
+// double lon2x_d(double lon) { return lon; }
+ 
+/* The following functions take or return there results in something close to meters, along the equator */
+ 
+	def y2lat_m(y:Double) = rad2deg(2 * atan(exp( (y / earth_radius ) )) - Pi/2)
+	def x2lon_m(x:Double) = rad2deg(x / earth_radius)
+	def lat2y_m(lat:Double) = earth_radius * log(tan(Pi/4+ deg2rad(lat)/2))
+	def lon2x_m(lon:Double) = deg2rad(lon) * earth_radius
+
+	//def y2lat(aY:Double) = Math.toDegrees(2* Math.atan(Math.exp(Math.toRadians(aY))) - Math.PI/2)
+	//def lat2y(aLat:Double) = Math.toDegrees(Math.log(Math.tan(Math.PI/4+Math.toRadians(aLat)/2)))
 
 	/** Create a [[HeigtMap]] from a PNG image. */
 	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean):HeightMap = {
@@ -149,6 +198,8 @@ object HeightMap {
   */
 class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Double, val scaleFactor:Double=0.01, val yFactor:Double=1.0) {
 	
+	import ResizeMethod._
+
 	/** When creating a volume during triangulation, adds a base this height.
 	  * This is set during triangulation. */
 	protected var baseDepth = 1.0
@@ -220,6 +271,18 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 		}
 	}
 
+	/** Value of the cell at (`col`, `row`). */
+	def cell(col:Int, row:Int):Point3 = data(row)(col)
+
+	/** Height at (`col`, `row`). */
+	def height(col:Int, row:Int):Double = cell(col, row).y
+
+	/** Lowest height. */
+	def minHeight:Double = minValue
+
+	/** Highest height. */
+	def maxHeight:Double = maxValue
+
 	/** Set a cell at (`col`, `row`) in the heightmap with `value`. The `value` is
 	  * scaled by `scaleFactor` and `yFactor`. */ 
 	def setCell(col:Int, row:Int, value:Double) {
@@ -253,6 +316,68 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 			y += 1
 		}
 	} 
+
+	/** Interpolate a new height-map with a different resolution. */
+	def resize(factor:Double, resizeMethod:ResizeMethod = Lanczos2):HeightMap = {
+		val colsTo = round(cols * factor).toInt
+		val rowsTo = round(rows * factor).toInt
+		val hmap   = new HeightMap(colsTo, rowsTo, nodata, cellSize, 1, 1)
+		var row    = 0
+		var col    = 0
+		val interpolator = chooseInterpolator(resizeMethod)
+
+		while(row < rowsTo) {
+			col = 0
+			while(col < colsTo) {
+				hmap.setCell(col, row, interpolator(col, row, colsTo, rowsTo))
+				col += 1
+			}
+			row += 1
+			if(row % 100 == 0)
+				printf("[row %d]", row)
+		}
+
+		hmap
+	}
+
+	private def chooseInterpolator(resizeMethod:ResizeMethod):(Int,Int,Int,Int)=>Double = resizeMethod match {
+		case Lanczos2 => interpolateLanczos(_, _, _, _, 2)
+		case Lanczos3 => interpolateLanczos(_, _, _, _, 3)
+		case Lanczos4 => interpolateLanczos(_, _, _, _, 4)
+		case Hq3x     => throw new RuntimeException("HQ3x TODO")
+		case Hq4x     => throw new RuntimeException("HQ4x TODO")
+		case _        => throw new RuntimeException("Unknown resize method")
+	}
+
+	private def interpolateLanczos(xTo:Int, yTo:Int, colsTo:Int, rowsTo:Int, a:Int = 2):Double = {
+		val xratio = cols.toDouble / colsTo
+		val yratio = rows.toDouble / rowsTo
+		val x = xTo * xratio
+		val y = yTo * yratio
+		val x_ = floor(x).toInt
+		val y_ = floor(y).toInt
+		var acc = 0.0
+		var i = 0			// along X
+		var j = y_ - a + 1	// along Y
+		var w = 0.0
+
+		while(j <= y_ + a) {
+			i = x_ - a + 1
+			while(i <= x_ + a) {
+				if(i >= 0 && i < cols && j >= 0 && j < rows) {
+					val l = lanczos(x - i, a) * lanczos(y - j, a)
+					acc += height(i, j) * l
+					w += l
+				}
+				i += 1
+			}
+			j += 1
+		}
+
+		acc / w
+	}
+
+	private def lanczos(x:Double, a:Double):Double = if(x != 0) (a * sin(Pi * x) * sin(Pi * x / a) / (Pi*Pi * x*x)) else 1
 
 	/** Triangulate the heightmap.
 	  *
@@ -433,5 +558,23 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 			output.end
 			output = null
 		}
+	}
+
+	/** Convert the heightmap surface to a PNG image with the given `fileName`. */
+	def toPNG(fileName:String) {
+		val converter = new ColorPNGConverter(fileName)
+
+		converter.begin(cols, rows, minValue, maxValue)
+		var x = 0
+		var y = 0
+		while(y < rows) {
+			x = 0
+			while(x < cols) {
+				converter.point(x, y, cell(x, y))
+				x += 1
+			}
+			y += 1
+		}
+		converter.end
 	}
 }

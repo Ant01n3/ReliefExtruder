@@ -205,6 +205,21 @@ class Rgba(
 		if(alpha > 1) alpha = 1.0 else if(alpha < 0) alpha = 0.0
 	}
 
+	/** Convert this color into its ARGB convertion stored in a 32 bits integer,
+	  * with alpha first on the 8 first bits, then red, green and blue in this
+	  * order on the following 3 series of 8 bits. */
+	def toIntARGB():Int = {
+		val r = (red*255).toInt
+		val g = (green*255).toInt
+		val b = (blue*255).toInt
+		val a = (alpha*255).toInt
+
+		((a << 24) & 0xFF000000) | 
+		((r << 16) & 0x00FF0000) |
+		((g <<  8) & 0x0000FF00) |
+		((b      ) & 0x000000FF) 
+	}
+
 	/** Convert this color to its HSV representation. The hue is in radians, the
 	  * saturation and value are between 0 and 1. The returned triplet is in this
 	  * order (hue, staturation, value). */
