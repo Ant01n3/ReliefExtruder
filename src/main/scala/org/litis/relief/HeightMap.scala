@@ -196,7 +196,7 @@ object HeightMap {
   *   - triangulate it,
   *   - save it to STL.
   */
-class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Double, val scaleFactor:Double=0.01, val yFactor:Double=1.0) {
+class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Double, val scaleFactor:Double=1.0, val yFactor:Double=1.0) {
 	
 	import ResizeMethod._
 
@@ -301,7 +301,6 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	/** Normalize the point cloud by aligning nodata points to the minimum point. */
 	def normalize() {
 		var y = 0
-		print("[min %f][max %f] ".format(minValue, maxValue))
 		while(y < rows) {
 			var x = 0
 			while(x < cols) {
@@ -321,7 +320,7 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	def resize(factor:Double, resizeMethod:ResizeMethod = Lanczos2):HeightMap = {
 		val colsTo = round(cols * factor).toInt
 		val rowsTo = round(rows * factor).toInt
-		val hmap   = new HeightMap(colsTo, rowsTo, nodata, cellSize, 1, 1)
+		val hmap   = new HeightMap(colsTo, rowsTo, nodata, cellSize, scaleFactor, yFactor)
 		var row    = 0
 		var col    = 0
 		val interpolator = chooseInterpolator(resizeMethod)
@@ -366,7 +365,7 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 			while(i <= x_ + a) {
 				if(i >= 0 && i < cols && j >= 0 && j < rows) {
 					val l = lanczos(x - i, a) * lanczos(y - j, a)
-					acc += height(i, j) * l
+					acc += ((height(i, j) / scaleFactor) / yFactor) * l
 					w += l
 				}
 				i += 1
@@ -374,10 +373,21 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 			j += 1
 		}
 
-		acc / w
+		if(w != 0)
+			acc / w 	// The lanczos coefficients do not always add to 1.
+		else acc
 	}
 
-	private def lanczos(x:Double, a:Double):Double = if(x != 0) (a * sin(Pi * x) * sin(Pi * x / a) / (Pi*Pi * x*x)) else 1
+
+	private def lanczos(x:Double, a:Double):Double = {
+	//private def lanczos(x:Double, a:Double):Double = if(x != 0) (a * sin(Pi * x) * sin(Pi * x / a) / (Pi*Pi * x*x)) else 1
+		if(x == 0) 1.0
+		else if(x <= a && x >= a) 0.0
+		else {
+			val pi_x = x * Pi
+			a * sin(pi_x) * sin(pi_x / a) / (pi_x * pi_x)
+		} 
+	}
 
 	/** Triangulate the heightmap.
 	  *
@@ -560,9 +570,11 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 		}
 	}
 
-	/** Convert the heightmap surface to a PNG image with the given `fileName`. */
-	def toPNG(fileName:String) {
-		val converter = new ColorPNGConverter(fileName)
+	/** Convert the heightmap surface to a PNG image with the given `fileName`.
+	  * If `grey` is true, the values are between 0 and 255. Else use a chromatic
+	  * circle to code color. */
+	def toPNG(fileName:String, grey:Boolean =  false) {
+		val converter = if(grey) new GreyPNGConverter(fileName) else new ColorPNGConverter(fileName)
 
 		converter.begin(cols, rows, minValue, maxValue)
 		var x = 0

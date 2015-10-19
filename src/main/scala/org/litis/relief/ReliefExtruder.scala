@@ -30,7 +30,7 @@ object ReliefExtruder extends App {
 	var cellsize = 1.0
 	var format   = OutputFormat.Unknown
 	var resize   = 1.0
-	var resizeMethod = Lanczos2
+	var resizeMethod = ResizeMethod.Unknown
 	var greyData = false
 
 	var output:String = null
@@ -94,8 +94,9 @@ object ReliefExtruder extends App {
 		println("       -imagescale <min> <max>         Specify the minimum <min> and maximum <max> elevations in an input image (not")
 		println("                                       used in csv format). Values are assumed to be meters.")
 		println("       -cellsize <size>                Spacing between data points. Values are assumed to be meters. Needed for images.")
-		println("       -grey                           If an image is passed, the hue is used by default to create a height, use grey")
-		println("                                       intensity instead with this option.")
+		println("       -grey                           If an image is passed as input, the hue is used by default to create a height, use grey")
+		println("                                       intensity instead with this option. For the PNG output format this options does the")
+		println("                                       same for the output.")
 		sys.exit(1)
 	}
 	
@@ -108,12 +109,15 @@ object ReliefExtruder extends App {
 		
 		printf("%s*%s Normalizing ", Console.YELLOW, Console.RESET)
 		heightMap.normalize()
-		printf(" %sOK%s%n", Console.GREEN, Console.RESET)
+		printf("[min %f][max %f] ", heightMap.minHeight, heightMap.maxHeight)
+		printf("%sOK%s%n", Console.GREEN, Console.RESET)
 
 		if(resize != 1.0 || resizeMethod != ResizeMethod.Unknown) {
-			printf("%s*%s Resize (by %.2f)", Console.YELLOW, Console.RESET, resize)
+			if(resizeMethod == ResizeMethod.Unknown) resizeMethod = Lanczos2
+			printf("%s*%s Resize (factor %.2f method %s) ", Console.YELLOW, Console.RESET, resize, resizeMethod)
 			heightMap = heightMap.resize(resize, resizeMethod)
-			printf(" %sOK%s%n", Console.GREEN, Console.RESET)
+			printf("[new hmap %dx%d][min=%f max=%f] ", heightMap.cols, heightMap.rows, heightMap.minHeight, heightMap.maxHeight)
+			printf("%sOK%s%n", Console.GREEN, Console.RESET)
 		}
 		
 		heightMap.setVolume(volume)
@@ -136,7 +140,7 @@ object ReliefExtruder extends App {
 			val outFile = "%s%s".format(if(output ne null) output else "out", if(output.endsWith(".png")) "" else ".png")
 
 			printf("%s*%s To PNG", Console.YELLOW, Console.RESET)
-			heightMap.toPNG(outFile)
+			heightMap.toPNG(outFile, greyData)
 			printf(" %sOK%s%n", Console.GREEN, Console.RESET)			
 		}
 	}
