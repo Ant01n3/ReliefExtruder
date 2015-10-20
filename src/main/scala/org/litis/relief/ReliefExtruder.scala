@@ -1,5 +1,6 @@
 package org.litis.relief
 
+import scala.collection.mutable.ArrayBuffer
 
 object OutputFormat extends Enumeration {
 	val STL = Value
@@ -11,7 +12,7 @@ object OutputFormat extends Enumeration {
 
 
 /** A launcher for the relief extruder app. */
-object ReliefExtruder extends App {
+object ReliefExtruder {
 
 	import OutputFormat._
 	import ResizeMethod._
@@ -27,6 +28,7 @@ object ReliefExtruder extends App {
 	var yscale   = 1.0
 	var imin     = 0.0
 	var imax     = 100.0
+	var clamp:(Double,Double) = _
 	var cellsize = 1.0
 	var format   = OutputFormat.Unknown
 	var resize   = 1.0
@@ -34,11 +36,17 @@ object ReliefExtruder extends App {
 	var greyData = false
 
 	var output:String = null
-	var input:String = null
+	var input = ArrayBuffer[String]()
 
-//	options(args.drop(1).toList)
-	options(args.toList)
-	
+	def main(args:Array[String]):Unit = {
+//		options(args.drop(1).toList)
+		options(args.toList)
+
+		if(input.isEmpty)
+			 usage("You must give at least one input file name")
+		else input.foreach { run(_) }
+	}
+
 	def options(list:List[String]) {
 		list match {
 			case Nil => {}
@@ -53,7 +61,8 @@ object ReliefExtruder extends App {
 			case "-imagescale" :: min :: max :: tail => { imin = min.toDouble; imax = max.toDouble; options(tail) }
 			case "-cellsize" :: s :: tail => { cellsize = s.toDouble; options(tail) }
 			case "-grey" :: tail => { greyData = true; options(tail) }
-			case a :: tail => { if(a.startsWith("-")) usage("Unknown option '%s'".format(a)) else { input = a; options(tail) } }
+			case "-clamp" :: min :: max :: tail => { clamp = (min.toDouble, max.toDouble); options(tail) }
+			case a :: tail => { if(a.startsWith("-")) usage("Unknown option '%s'".format(a)) else { input += a; options(tail) } }
 		}
 	}
 
@@ -62,10 +71,6 @@ object ReliefExtruder extends App {
 		case "png" => OutputFormat.PNG
 		case _ => throw new RuntimeException("unknown output format '%s'".format(f))
 	}
-
-	if(input eq null)
-		 usage("You must give an input file name")
-	else run()
 
 	def usage(message:String) {
 		if(message ne null)
@@ -78,7 +83,11 @@ object ReliefExtruder extends App {
 		println("       -out <output>                   Name of the resulting output file, the '.stl' or '.png' extension is added if needed")
 		println("                                       If given and the format is STL, the output is a binary STL file. If not given, output goes to")
 		println("                                       the standard output as an ASCII STL. If the format is PNG, and there is no output given")
-		println("                                       the file is named  'out.png'.")
+		println("                                       the file is named using the input file name without extension and adding '.png'.")
+		println("       -clamp <min> <max>              Clamp the minimum and maximum height of the file. If the heights are withing this bound they")
+		println("                                       are unchanged. Else they are reset to the min or max. The min and max heights are also set")
+		println("                                       to this value, even if no height in the file reach them. This allows to have several files")
+		println("                                       at the same scale.")
 		println("       -format <format>                Output format, either 'STL' or 'PNG'. The default format is 'STL'. If the -out option")
 		println("                                       has an extension, this one is used and this option is not necessary, but is chosen if given.")
 		println("       -resize <factor>                Change the resolution of the heightmap by 'factor' (factor is a real number but not 0).")
@@ -102,9 +111,9 @@ object ReliefExtruder extends App {
 	
 // Run
 
-	def run() {
+	def run(inFile:String) {
 		printf("%s*%s Reading ", Console.YELLOW, Console.RESET)
-		var heightMap = HeightMap(input, startx, endx, starty, endy, scale, yscale, imin, imax, cellsize, greyData)
+		var heightMap = HeightMap(inFile, startx, endx, starty, endy, scale, yscale, imin, imax, cellsize, greyData, clamp)
 		printf(" %sOK%s%n", Console.GREEN, Console.RESET)
 		
 		printf("%s*%s Normalizing ", Console.YELLOW, Console.RESET)
@@ -116,16 +125,25 @@ object ReliefExtruder extends App {
 			if(resizeMethod == ResizeMethod.Unknown) resizeMethod = Lanczos2
 			printf("%s*%s Resize (factor %.2f method %s) ", Console.YELLOW, Console.RESET, resize, resizeMethod)
 			heightMap = heightMap.resize(resize, resizeMethod)
-			printf("[new hmap %dx%d][min=%f max=%f] ", heightMap.cols, heightMap.rows, heightMap.minHeight, heightMap.maxHeight)
+			printf("[new hmap %dx%d][min=%f max=%f] ", heightMap.cols, heightMap.rows, heightMap.minHeight, heightMap.maxHeight, clamp)
 			printf("%sOK%s%n", Console.GREEN, Console.RESET)
+
+		printf("%s*%s Normalizing ", Console.YELLOW, Console.RESET)
+		heightMap.normalize()
+		printf("[min %f][max %f] ", heightMap.minHeight, heightMap.maxHeight)
+		printf("%sOK%s%n", Console.GREEN, Console.RESET)
+
 		}
 		
 		heightMap.setVolume(volume)
 
 		if(format == OutputFormat.Unknown) {
-			if(output.toLowerCase.endsWith(".stl")) format = STL
-			else if(output.toLowerCase.endsWith(".png")) format = PNG
-			else format = STL
+			if(output ne null) {
+				if(output.toLowerCase.endsWith(".stl")) format = STL
+				else if(output.toLowerCase.endsWith(".png")) format = PNG
+			} else {
+				format = STL
+			}
 		}
 
 		if(format == STL) {
@@ -137,11 +155,13 @@ object ReliefExtruder extends App {
 			heightMap.endSTL
 			printf(" %sOK%s%n", Console.GREEN, Console.RESET)
 		} else if(format == PNG) {
-			val outFile = "%s%s".format(if(output ne null) output else "out", if(output.endsWith(".png")) "" else ".png")
+			val outFile = "%s%s".format(if(output ne null) output else inputWithoutExt(inFile), if((output ne null) && output.endsWith(".png")) "" else ".png")
 
 			printf("%s*%s To PNG", Console.YELLOW, Console.RESET)
 			heightMap.toPNG(outFile, greyData)
 			printf(" %sOK%s%n", Console.GREEN, Console.RESET)			
 		}
 	}
+
+	private def inputWithoutExt(in:String):String = in.substring(0, in.lastIndexOf("."))
 }

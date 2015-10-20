@@ -45,18 +45,18 @@ object HeightMap {
 
 // HeightMap Creation from files
 
-	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean):HeightMap = {
+	def apply(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean, clamp:(Double,Double)):HeightMap = {
 		if(fileName.endsWith(".csv") || fileName.endsWith(".asc")) {
-			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor, cellSize)
+			readFileCSV(fileName, startx, endx, starty, endy, scaleFactor, yFactor, cellSize, clamp)
 		} else if(fileName.endsWith(".png")) {
-			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax, cellSize, greyData)
+			readFileImage(fileName, startx, endx, starty, endy, scaleFactor, yFactor, iMin, iMax, cellSize, greyData, clamp)
 		} else {
 			throw new RuntimeException("only '.csv', '.asc' and '.png' files are accepted")
 		}
 	}
 
 	/** Created a [[HeightMap]] from a CSV or ASC file. */
-	def readFileCSV(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, cellSize:Double):HeightMap = {
+	def readFileCSV(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, cellSize:Double, clamp:(Double,Double)):HeightMap = {
 		var heightMap:HeightMap = null
 		val src      = new BufferedSource(new FileInputStream(fileName))
 		var ncols    = 0
@@ -87,7 +87,7 @@ object HeightMap {
 					lonm = 0.1099
 					printf("[(%f %f) -> %f lat %f lon -> %f lat %f lon]%n", latm, lonm, y2lat_m(latm), x2lon_m(lonm), lat2y_m(latm), lon2x_m(lonm))
 
-				 	heightMap = new HeightMap(ex-sx, ey-sy, nodata, cellsize, scaleFactor, yFactor)
+				 	heightMap = new HeightMap(ex-sx, ey-sy, nodata, cellsize, scaleFactor, yFactor, clamp)
 					print("[%d x %d -> %d x %d (spaces=%b)]".format(ncols, nrows, ex-sx, ey-sy, spaceSeparated))
 					heightMap.translate(sx, sy)
 //printf("sx=%d ex=%d sy=%d ey=%d ncols=%d nrows=%d size=%f nodata=%f%n", sx, ex, sy, ey, ncols, nrows, cellSize, nodata)
@@ -131,7 +131,7 @@ object HeightMap {
 	//def lat2y(aLat:Double) = Math.toDegrees(Math.log(Math.tan(Math.PI/4+Math.toRadians(aLat)/2)))
 
 	/** Create a [[HeigtMap]] from a PNG image. */
-	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean):HeightMap = {
+	def readFileImage(fileName:String, startx:Int, endx:Int, starty:Int, endy:Int, scaleFactor:Double, yFactor:Double, iMin:Double, iMax:Double, cellSize:Double, greyData:Boolean, clamp:(Double,Double)):HeightMap = {
         val image = ImageIO.read(new File(fileName))
 		var sx    = startx
 		var ex    = endx
@@ -143,7 +143,7 @@ object HeightMap {
         if(sx < 0) sx = 0; if(ex < 0 || ex > image.getWidth)  ex = image.getWidth
         if(sy < 0) sy = 0; if(ey < 0 || ey > image.getHeight) ey = image.getHeight
 
-		var heightMap = new HeightMap(ex-sx, ey-sy, 0, cellSize, scaleFactor, yFactor)
+		var heightMap = new HeightMap(ex-sx, ey-sy, 0, cellSize, scaleFactor, yFactor, clamp)
 		var row = sy
 
 		while(row < ey) {
@@ -196,7 +196,7 @@ object HeightMap {
   *   - triangulate it,
   *   - save it to STL.
   */
-class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Double, val scaleFactor:Double=1.0, val yFactor:Double=1.0) {
+class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Double, val scaleFactor:Double=1.0, val yFactor:Double=1.0, val clamp:(Double, Double)) {
 	
 	import ResizeMethod._
 
@@ -221,6 +221,11 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 
 	/** Computed maximum value in the heightmap. */
 	protected var maxValue = Double.MinValue
+
+	if(clamp ne null) {
+		minValue = clamp._1
+		maxValue = clamp._2
+	}
 
 	/** Number of stored points. */
 	def pointCount:Int = data.size
@@ -286,7 +291,12 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	/** Set a cell at (`col`, `row`) in the heightmap with `value`. The `value` is
 	  * scaled by `scaleFactor` and `yFactor`. */ 
 	def setCell(col:Int, row:Int, value:Double) {
-		val v = value * scaleFactor * yFactor
+		var v = value * scaleFactor * yFactor
+
+		if(clamp ne null) {
+			if(value < clamp._1) v = clamp._1
+			if(value > clamp._2) v = clamp._2
+		}
 
 		if(value != nodata) {
 			if(v < minValue) minValue = v
@@ -301,26 +311,32 @@ class HeightMap(val cols:Int, val rows:Int, val nodata:Double, val cellSize:Doub
 	/** Normalize the point cloud by aligning nodata points to the minimum point. */
 	def normalize() {
 		var y = 0
+//		var avg = 0.0
 		while(y < rows) {
 			var x = 0
 			while(x < cols) {
 				val d = (data(y)(x)).y
 
-				if(d == nodata*scaleFactor*yFactor && d < minValue) {
+				if(d == nodata * scaleFactor * yFactor && d < minValue) {
 					(data(y)(x)).y = minValue
 //					print("[%f]".format(d))
 				}
+
+//				avg += (data(y)(x)).y
+
 				x += 1
 			}
 			y += 1
 		}
+		// avg /= (cols*rows)
+		// printf("<normalize min=%f max=%f avg=%f>%n", minValue, maxValue, avg)
 	} 
 
 	/** Interpolate a new height-map with a different resolution. */
 	def resize(factor:Double, resizeMethod:ResizeMethod = Lanczos2):HeightMap = {
 		val colsTo = round(cols * factor).toInt
 		val rowsTo = round(rows * factor).toInt
-		val hmap   = new HeightMap(colsTo, rowsTo, nodata, cellSize, scaleFactor, yFactor)
+		val hmap   = new HeightMap(colsTo, rowsTo, nodata, cellSize, scaleFactor, yFactor, clamp)
 		var row    = 0
 		var col    = 0
 		val interpolator = chooseInterpolator(resizeMethod)
